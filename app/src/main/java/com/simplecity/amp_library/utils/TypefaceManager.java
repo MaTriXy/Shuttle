@@ -2,9 +2,7 @@ package com.simplecity.amp_library.utils;
 
 import android.graphics.Typeface;
 import android.support.v4.util.ArrayMap;
-
 import com.simplecity.amp_library.ShuttleApplication;
-
 import java.util.Map;
 
 public class TypefaceManager {
@@ -14,10 +12,6 @@ public class TypefaceManager {
     public static final String SANS_SERIF_MEDIUM = "sans-serif-medium";
 
     public static final String SANS_SERIF_LIGHT = "sans-serif-light";
-
-    public static final String ANDROID_CLOCK_MONO_THIN = "AndroidClockMono-Thin.ttf";
-
-    private final String ROBOTO_MEDIUM = "Roboto-Medium.ttf";
 
     private final Map<String, Typeface> mCache = new ArrayMap<>();
     private static TypefaceManager sInstance = null;
@@ -49,11 +43,7 @@ public class TypefaceManager {
                     result = Typeface.create("sans-serif", Typeface.NORMAL);
                     break;
                 case SANS_SERIF_MEDIUM:
-                    if (ShuttleUtils.hasLollipop()) {
-                        result = Typeface.create("sans-serif-medium", Typeface.NORMAL);
-                    } else {
-                        result = Typeface.createFromAsset(ShuttleApplication.getInstance().getAssets(), "fonts/" + ROBOTO_MEDIUM);
-                    }
+                    result = Typeface.create("sans-serif-medium", Typeface.NORMAL);
                     break;
                 case SANS_SERIF_LIGHT:
                     result = Typeface.create("sans-serif-light", Typeface.NORMAL);
@@ -66,6 +56,5 @@ public class TypefaceManager {
         }
         return result;
     }
-
 }
 

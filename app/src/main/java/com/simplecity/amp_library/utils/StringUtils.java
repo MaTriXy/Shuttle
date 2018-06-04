@@ -5,9 +5,7 @@ import android.content.res.Resources;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.text.TextUtils;
-
 import com.simplecity.amp_library.R;
-
 import java.text.Normalizer;
 import java.util.Arrays;
 import java.util.Formatter;
@@ -29,48 +27,12 @@ public class StringUtils {
     }
 
     /**
-     * Method makeAlbumsLabel.
-     *
-     * @param context   context
-     * @param numalbums the number of albums for this artist
-     * @param numsongs  the number of songs for this artist
-     * @param isUnknown boolean
-     * @return a label in the vein of "5 albums | 2 songs"
-     */
-    public static String makeAlbumsLabel(Context context, int numalbums, int numsongs, boolean isUnknown) {
-        // There are two formats for the albums/songs information:
-        // "N Song(s)" - used for unknown artist/album
-        // "N Album(s)" - used for known albums
-
-        final StringBuilder songs_albums = new StringBuilder();
-
-        final Resources r = context.getResources();
-        if (isUnknown) {
-            if (numsongs == 1) {
-                songs_albums.append(context.getString(R.string.onesong));
-            } else if (numsongs > 0) {
-                final String f = r.getQuantityText(R.plurals.Nsongs, numsongs).toString();
-                sFormatBuilder.setLength(0);
-                sFormatter.format(f, numsongs);
-                songs_albums.append(sFormatBuilder);
-            }
-        } else if (numalbums > 0) {
-            final String f = r.getQuantityText(R.plurals.Nalbums, numalbums).toString();
-            sFormatBuilder.setLength(0);
-            sFormatter.format(f, numalbums);
-            songs_albums.append(sFormatBuilder);
-            songs_albums.append(context.getString(R.string.albumsongseparator));
-        }
-        return songs_albums.toString();
-    }
-
-    /**
      * Method makeTimeString.
      * <p>
      * Todo: Move to StringUtils or somewhere else
      *
      * @param context Context
-     * @param secs    long
+     * @param secs long
      * @return String
      */
     public static String makeTimeString(@NonNull Context context, long secs) {
@@ -89,6 +51,7 @@ public class StringUtils {
 
     private static String makeTimeString(String formatString, long secs) {
         long absSeconds = Math.abs(secs);
+        sFormatBuilder.setLength(0);
         return sFormatter.format(formatString,
                 secs < 0 ? "- " : "",
                 absSeconds / 3600,
@@ -102,9 +65,9 @@ public class StringUtils {
     /**
      * Method makeSubfoldersLabel.
      *
-     * @param context       context
+     * @param context context
      * @param numSubfolders the number of subFolders for this folder
-     * @param numSubfiles   the number of subFiles for this folder
+     * @param numSubfiles the number of subFiles for this folder
      * @return a label in the vein of "5 folders | 3 files"
      */
     public static String makeSubfoldersLabel(Context context, int numSubfolders, int numSubfiles) {
@@ -203,6 +166,10 @@ public class StringUtils {
         return String.format("%s", year);
     }
 
+    public static String makeSongsAndTimeLabel(Context context, int numSongs, long secs) {
+        return context.getResources().getString(R.string.songs_time_label, makeSongsLabel(context, numSongs), makeLongTimeString(context, secs));
+    }
+
     /**
      * Converts a name to a "key" that can be used for grouping, sorting
      * and searching.
@@ -277,7 +244,7 @@ public class StringUtils {
      * from <a href="http://en.wikipedia.org/wiki/Jaro%E2%80%93Winkler_distance">http://en.wikipedia.org/wiki/Jaro%E2%80%93Winkler_distance</a>.</p>
      * <p>
      *
-     * @param first  the first String, must not be null
+     * @param first the first String, must not be null
      * @param second the second String, must not be null
      * @return result similarity
      */
@@ -353,6 +320,17 @@ public class StringUtils {
                 break;
             }
         }
-        return new int[]{matches, transpositions / 2, prefix, max.length()};
+        return new int[] { matches, transpositions / 2, prefix, max.length() };
+    }
+
+    public static int parseInt(@Nullable String string) {
+        if (string != null) {
+            try {
+                return Integer.parseInt(string);
+            } catch (NumberFormatException ignored) {
+
+            }
+        }
+        return -1;
     }
 }

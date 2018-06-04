@@ -7,7 +7,6 @@ import android.content.SharedPreferences;
 import android.net.Uri;
 import android.preference.PreferenceManager;
 import android.support.v4.content.ContextCompat;
-
 import com.afollestad.aesthetic.Aesthetic;
 import com.afollestad.materialdialogs.MaterialDialog;
 import com.afollestad.materialdialogs.color.ColorChooserDialog;
@@ -29,13 +28,10 @@ import com.simplecity.amp_library.utils.AnalyticsManager;
 import com.simplecity.amp_library.utils.ColorPalette;
 import com.simplecity.amp_library.utils.SettingsManager;
 import com.simplecity.amp_library.utils.ShuttleUtils;
-
-import java.util.List;
-
-import javax.inject.Inject;
-
 import io.reactivex.Completable;
 import io.reactivex.schedulers.Schedulers;
+import java.util.List;
+import javax.inject.Inject;
 
 public class SettingsPresenter extends PurchasePresenter<SettingsView> {
 
@@ -59,7 +55,7 @@ public class SettingsPresenter extends PurchasePresenter<SettingsView> {
         if (activity instanceof BaseActivity) {
             BillingManager billingManager = ((BaseActivity) activity).getBillingManager();
             if (billingManager != null) {
-                billingManager.queryPurchases();
+                billingManager.restorePurchases();
             }
         }
     }
@@ -170,7 +166,7 @@ public class SettingsPresenter extends PurchasePresenter<SettingsView> {
         SettingsView settingsView = getView();
         if (settingsView != null) {
             settingsView.showAccentColorDialog(
-                    new ColorChooserDialog.Builder(context, R.string.pref_title_theme_pick_color)
+                    new ColorChooserDialog.Builder(context, R.string.pref_title_theme_pick_accent_color)
                             .accentMode(true)
                             .allowUserColorInput(true)
                             .allowUserColorInputAlpha(false)

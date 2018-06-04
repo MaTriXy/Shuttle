@@ -3,11 +3,13 @@ package com.simplecity.amp_library.tagger;
 import android.os.AsyncTask;
 import android.os.ParcelFileDescriptor;
 import android.support.v4.provider.DocumentFile;
-
 import com.simplecity.amp_library.ShuttleApplication;
 import com.simplecity.amp_library.model.TagUpdate;
-import com.simplecity.amp_library.utils.ShuttleUtils;
-
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import org.jaudiotagger.audio.AudioFile;
 import org.jaudiotagger.audio.AudioFileIO;
 import org.jaudiotagger.audio.exceptions.CannotReadException;
@@ -16,12 +18,6 @@ import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException;
 import org.jaudiotagger.audio.exceptions.ReadOnlyFileException;
 import org.jaudiotagger.tag.Tag;
 import org.jaudiotagger.tag.TagException;
-
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
 public class TaggerTask extends AsyncTask<Object, Integer, Boolean> {
 
@@ -60,11 +56,11 @@ public class TaggerTask extends AsyncTask<Object, Integer, Boolean> {
     }
 
     public TaggerTask(boolean showAlbum, boolean showTrack, List<String> paths,
-                      List<DocumentFile> documentFiles, String titleText, String albumText,
-                      String artistText, String albumArtistText, String yearText, String trackText,
-                      String trackTotalText, String discText, String discTotalText, String lyricsText,
-                      String commentText, String genreText,
-                      TagCompletionListener listener) {
+            List<DocumentFile> documentFiles, String titleText, String albumText,
+            String artistText, String albumArtistText, String yearText, String trackText,
+            String trackTotalText, String discText, String discTotalText, String lyricsText,
+            String commentText, String genreText,
+            TagCompletionListener listener) {
 
         this.showAlbum = showAlbum;
         this.showTrack = showTrack;
@@ -127,7 +123,7 @@ public class TaggerTask extends AsyncTask<Object, Integer, Boolean> {
                 File temp = null;
                 if (tagUpdate.hasChanged()) {
 
-                    if (ShuttleUtils.hasLollipop() && TaggerUtils.requiresPermission(paths)) {
+                    if (TaggerUtils.requiresPermission(paths)) {
                         temp = new File(ShuttleApplication.getInstance().getFilesDir(), orig.getName());
                         tempFiles.add(temp);
                         TaggerUtils.copyFile(orig, temp);
@@ -142,7 +138,7 @@ public class TaggerTask extends AsyncTask<Object, Integer, Boolean> {
                     tagUpdate.updateTag(tag);
                     AudioFileIO.write(audioFile);
 
-                    if (ShuttleUtils.hasLollipop() && requiresPermission && temp != null) {
+                    if (requiresPermission && temp != null) {
                         DocumentFile documentFile = documentFiles.get(i);
                         if (documentFile != null) {
                             ParcelFileDescriptor pfd = ShuttleApplication.getInstance().getContentResolver().openFileDescriptor(documentFile.getUri(), "w");
@@ -162,7 +158,6 @@ public class TaggerTask extends AsyncTask<Object, Integer, Boolean> {
 
                 publishProgress(i);
                 success = true;
-
             } catch (CannotWriteException | IOException | CannotReadException | InvalidAudioFrameException | TagException | ReadOnlyFileException e) {
                 e.printStackTrace();
             } finally {

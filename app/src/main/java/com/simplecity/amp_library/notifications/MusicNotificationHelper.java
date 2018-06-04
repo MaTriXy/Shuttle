@@ -14,7 +14,6 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.media.session.MediaSessionCompat;
-
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.Priority;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
@@ -25,14 +24,13 @@ import com.simplecity.amp_library.R;
 import com.simplecity.amp_library.glide.utils.GlideUtils;
 import com.simplecity.amp_library.model.Song;
 import com.simplecity.amp_library.playback.MusicService;
+import com.simplecity.amp_library.playback.constants.ServiceCommand;
 import com.simplecity.amp_library.utils.LogUtils;
 import com.simplecity.amp_library.utils.PlaceholderProvider;
 import com.simplecity.amp_library.utils.PlaylistUtils;
-
-import java.util.ConcurrentModificationException;
-
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.schedulers.Schedulers;
+import java.util.ConcurrentModificationException;
 
 public class MusicNotificationHelper extends NotificationHelper {
 
@@ -54,7 +52,8 @@ public class MusicNotificationHelper extends NotificationHelper {
         handler = new Handler(Looper.getMainLooper());
     }
 
-    public NotificationCompat.Builder getBuilder(Context context, @NonNull Song song, @NonNull MediaSessionCompat mediaSessionCompat, @Nullable Bitmap bitmap, boolean isPlaying, boolean isFavorite) {
+    public NotificationCompat.Builder getBuilder(Context context, @NonNull Song song, @NonNull MediaSessionCompat.Token mediaSessionToken, @Nullable Bitmap bitmap, boolean isPlaying,
+            boolean isFavorite) {
 
         Intent intent = new Intent(BuildConfig.APPLICATION_ID + ".PLAYBACK_VIEWER");
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -69,26 +68,26 @@ public class MusicNotificationHelper extends NotificationHelper {
                 .setContentText(song.artistName + " - " + song.albumName)
                 .setStyle(new android.support.v4.media.app.NotificationCompat.MediaStyle()
                         .setShowActionsInCompactView(0, 1, 2)
-                        .setMediaSession(mediaSessionCompat.getSessionToken()))
+                        .setMediaSession(mediaSessionToken))
                 .addAction(
                         R.drawable.ic_skip_previous_24dp,
                         context.getString(R.string.btn_prev),
-                        MusicService.retrievePlaybackAction(context, MusicService.ServiceCommand.PREV_ACTION)
+                        MusicService.retrievePlaybackAction(context, ServiceCommand.PREV_ACTION)
                 )
                 .addAction(
                         isPlaying ? R.drawable.ic_pause_24dp : R.drawable.ic_play_24dp,
                         context.getString(isPlaying ? R.string.btn_pause : R.string.btn_play),
-                        MusicService.retrievePlaybackAction(context, MusicService.ServiceCommand.TOGGLE_PAUSE_ACTION)
+                        MusicService.retrievePlaybackAction(context, ServiceCommand.TOGGLE_PAUSE_ACTION)
                 )
                 .addAction(
                         R.drawable.ic_skip_next_24dp,
                         context.getString(R.string.btn_skip),
-                        MusicService.retrievePlaybackAction(context, MusicService.ServiceCommand.NEXT_ACTION)
+                        MusicService.retrievePlaybackAction(context, ServiceCommand.NEXT_ACTION)
                 )
                 .addAction(
                         isFavorite ? R.drawable.ic_favorite_24dp_scaled : R.drawable.ic_favorite_border_24dp_scaled,
                         context.getString(R.string.fav_add),
-                        MusicService.retrievePlaybackAction(context, MusicService.ServiceCommand.TOGGLE_FAVORITE)
+                        MusicService.retrievePlaybackAction(context, ServiceCommand.TOGGLE_FAVORITE)
                 )
                 .setShowWhen(false)
                 .setVisibility(android.support.v4.app.NotificationCompat.VISIBILITY_PUBLIC);
@@ -101,8 +100,8 @@ public class MusicNotificationHelper extends NotificationHelper {
     }
 
     @SuppressLint("CheckResult")
-    public void notify(Context context, @NonNull Song song, boolean isPlaying, @NonNull MediaSessionCompat mediaSessionCompat) {
-        notification = getBuilder(context, song, mediaSessionCompat, bitmap, isPlaying, isFavorite).build();
+    public void notify(Context context, @NonNull Song song, boolean isPlaying, @NonNull MediaSessionCompat.Token mediaSessionToken) {
+        notification = getBuilder(context, song, mediaSessionToken, bitmap, isPlaying, isFavorite).build();
         notify(NOTIFICATION_ID, notification);
 
         PlaylistUtils.isFavorite(song)
@@ -111,7 +110,7 @@ public class MusicNotificationHelper extends NotificationHelper {
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(isFavorite -> {
                     this.isFavorite = isFavorite;
-                    notification = getBuilder(context, song, mediaSessionCompat, MusicNotificationHelper.this.bitmap, isPlaying, isFavorite).build();
+                    notification = getBuilder(context, song, mediaSessionToken, MusicNotificationHelper.this.bitmap, isPlaying, isFavorite).build();
                     notify(notification);
                 });
 
@@ -127,7 +126,7 @@ public class MusicNotificationHelper extends NotificationHelper {
                     public void onResourceReady(Bitmap resource, GlideAnimation<? super Bitmap> glideAnimation) {
                         MusicNotificationHelper.this.bitmap = resource;
                         try {
-                            notification = getBuilder(context, song, mediaSessionCompat, bitmap, isPlaying, isFavorite).build();
+                            notification = getBuilder(context, song, mediaSessionToken, bitmap, isPlaying, isFavorite).build();
                             MusicNotificationHelper.this.notify(notification);
                         } catch (NullPointerException | ConcurrentModificationException e) {
                             LogUtils.logException(TAG, "Exception while attempting to update notification with glide image.", e);
@@ -139,7 +138,7 @@ public class MusicNotificationHelper extends NotificationHelper {
                         MusicNotificationHelper.this.bitmap = GlideUtils.drawableToBitmap(errorDrawable);
                         super.onLoadFailed(e, errorDrawable);
                         try {
-                            notification = getBuilder(context, song, mediaSessionCompat, bitmap, isPlaying, isFavorite).build();
+                            notification = getBuilder(context, song, mediaSessionToken, bitmap, isPlaying, isFavorite).build();
                             MusicNotificationHelper.this.notify(NOTIFICATION_ID, notification);
                         } catch (IllegalArgumentException error) {
                             LogUtils.logException(TAG, "Exception while attempting to update notification with error image", error);
@@ -148,8 +147,8 @@ public class MusicNotificationHelper extends NotificationHelper {
                 }));
     }
 
-    public void startForeground(Service service, @NonNull Song song, boolean isPlaying, @NonNull MediaSessionCompat mediaSessionCompat) {
-        notify(service, song, isPlaying, mediaSessionCompat);
+    public void startForeground(Service service, @NonNull Song song, boolean isPlaying, @NonNull MediaSessionCompat.Token mediaSessionToken) {
+        notify(service, song, isPlaying, mediaSessionToken);
         service.startForeground(NOTIFICATION_ID, notification);
     }
 

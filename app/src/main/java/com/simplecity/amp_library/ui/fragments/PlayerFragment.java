@@ -19,7 +19,9 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
-
+import butterknife.BindView;
+import butterknife.ButterKnife;
+import butterknife.Unbinder;
 import com.afollestad.aesthetic.Aesthetic;
 import com.afollestad.aesthetic.Util;
 import com.afollestad.materialdialogs.MaterialDialog;
@@ -38,13 +40,14 @@ import com.jakewharton.rxbinding2.widget.SeekBarStopChangeEvent;
 import com.jp.wasabeef.glide.transformations.BlurTransformation;
 import com.simplecity.amp_library.R;
 import com.simplecity.amp_library.ShuttleApplication;
+import com.simplecity.amp_library.dagger.module.ActivityModule;
 import com.simplecity.amp_library.dagger.module.FragmentModule;
 import com.simplecity.amp_library.glide.palette.PaletteBitmap;
 import com.simplecity.amp_library.glide.palette.PaletteBitmapTranscoder;
 import com.simplecity.amp_library.model.AlbumArtist;
 import com.simplecity.amp_library.model.Genre;
 import com.simplecity.amp_library.model.Song;
-import com.simplecity.amp_library.playback.MusicService;
+import com.simplecity.amp_library.playback.QueueManager;
 import com.simplecity.amp_library.rx.UnsafeConsumer;
 import com.simplecity.amp_library.tagger.TaggerDialog;
 import com.simplecity.amp_library.ui.drawer.NavigationEventRelay;
@@ -60,26 +63,19 @@ import com.simplecity.amp_library.ui.views.SnowfallView;
 import com.simplecity.amp_library.ui.views.multisheet.MultiSheetSlideEventRelay;
 import com.simplecity.amp_library.utils.DataManager;
 import com.simplecity.amp_library.utils.LogUtils;
-import com.simplecity.amp_library.utils.MusicUtils;
 import com.simplecity.amp_library.utils.PlaceholderProvider;
 import com.simplecity.amp_library.utils.SettingsManager;
 import com.simplecity.amp_library.utils.ShuttleUtils;
 import com.simplecity.amp_library.utils.StringUtils;
-
-import java.util.Collections;
-import java.util.concurrent.TimeUnit;
-
-import javax.inject.Inject;
-
-import butterknife.BindView;
-import butterknife.ButterKnife;
-import butterknife.Unbinder;
 import io.reactivex.BackpressureStrategy;
 import io.reactivex.Flowable;
 import io.reactivex.Observable;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.CompositeDisposable;
 import io.reactivex.schedulers.Schedulers;
+import java.util.Collections;
+import java.util.concurrent.TimeUnit;
+import javax.inject.Inject;
 
 public class PlayerFragment extends BaseFragment implements
         PlayerView,
@@ -179,6 +175,7 @@ public class PlayerFragment extends BaseFragment implements
         super.onCreate(savedInstanceState);
 
         ShuttleApplication.getInstance().getAppComponent()
+                .plus(new ActivityModule(getActivity()))
                 .plus(new FragmentModule(this))
                 .inject(this);
     }
@@ -382,14 +379,14 @@ public class PlayerFragment extends BaseFragment implements
     }
 
     @Override
-    public void shuffleChanged(@MusicService.ShuffleMode int shuffleMode) {
+    public void shuffleChanged(@QueueManager.ShuffleMode int shuffleMode) {
         if (shuffleButton != null) {
             shuffleButton.setShuffleMode(shuffleMode);
         }
     }
 
     @Override
-    public void repeatChanged(@MusicService.RepeatMode int repeatMode) {
+    public void repeatChanged(@QueueManager.RepeatMode int repeatMode) {
         if (repeatButton != null) {
             repeatButton.setRepeatMode(repeatMode);
         }
@@ -426,12 +423,12 @@ public class PlayerFragment extends BaseFragment implements
             track.setSelected(true);
         }
         if (album != null) {
-            album.setText(String.format("%s | %s", song.artistName, song.albumName));
+            album.setText(String.format("%s • %s", song.artistName, song.albumName));
         }
 
         if (isLandscape) {
             toolbar.setTitle(song.name);
-            toolbar.setSubtitle(String.format("%s | %s", song.artistName, song.albumName));
+            toolbar.setSubtitle(String.format("%s • %s", song.artistName, song.albumName));
 
             target = Glide.with(this)
                     .load(song)
@@ -603,7 +600,7 @@ public class PlayerFragment extends BaseFragment implements
 
     @SuppressLint("CheckResult")
     private void goToArtist() {
-        AlbumArtist currentAlbumArtist = MusicUtils.getAlbumArtist();
+        AlbumArtist currentAlbumArtist = mediaManager.getAlbumArtist();
         // MusicUtils.getAlbumArtist() is only populate with the album the current Song belongs to.
         // Let's find the matching AlbumArtist in the DataManager.albumArtistRelay
         DataManager.getInstance().getAlbumArtistsRelay()
@@ -616,12 +613,12 @@ public class PlayerFragment extends BaseFragment implements
     }
 
     private void goToAlbum() {
-        navigationEventRelay.sendEvent(new NavigationEventRelay.NavigationEvent(NavigationEventRelay.NavigationEvent.Type.GO_TO_ALBUM, MusicUtils.getAlbum(), true));
+        navigationEventRelay.sendEvent(new NavigationEventRelay.NavigationEvent(NavigationEventRelay.NavigationEvent.Type.GO_TO_ALBUM, mediaManager.getAlbum(), true));
     }
 
     @SuppressLint("CheckResult")
     private void goToGenre() {
-        MusicUtils.getGenre()
+        mediaManager.getGenre()
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(
@@ -636,5 +633,4 @@ public class PlayerFragment extends BaseFragment implements
         valueAnimator.addUpdateListener(animator -> consumer.accept((Integer) animator.getAnimatedValue()));
         valueAnimator.start();
     }
-
 }

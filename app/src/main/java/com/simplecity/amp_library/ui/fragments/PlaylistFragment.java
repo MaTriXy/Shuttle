@@ -2,13 +2,13 @@ package com.simplecity.amp_library.ui.fragments;
 
 import android.content.Context;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.PopupMenu;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-
 import com.annimon.stream.Stream;
 import com.simplecity.amp_library.R;
 import com.simplecity.amp_library.model.Playlist;
@@ -17,26 +17,27 @@ import com.simplecity.amp_library.ui.modelviews.PlaylistView;
 import com.simplecity.amp_library.utils.ComparisonUtils;
 import com.simplecity.amp_library.utils.DataManager;
 import com.simplecity.amp_library.utils.LogUtils;
-import com.simplecity.amp_library.utils.MenuUtils;
 import com.simplecity.amp_library.utils.PermissionUtils;
+import com.simplecity.amp_library.utils.menu.playlist.PlaylistMenuFragmentHelper;
+import com.simplecity.amp_library.utils.menu.playlist.PlaylistMenuUtils;
 import com.simplecityapps.recycler_adapter.adapter.ViewModelAdapter;
 import com.simplecityapps.recycler_adapter.model.ViewModel;
 import com.simplecityapps.recycler_adapter.recyclerview.RecyclerListener;
 import com.simplecityapps.recyclerview_fastscroll.views.FastScrollRecyclerView;
-
+import io.reactivex.Observable;
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.CompositeDisposable;
+import io.reactivex.disposables.Disposable;
+import io.reactivex.schedulers.Schedulers;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import io.reactivex.Observable;
-import io.reactivex.android.schedulers.AndroidSchedulers;
-import io.reactivex.disposables.Disposable;
-import io.reactivex.schedulers.Schedulers;
-
 public class PlaylistFragment extends BaseFragment {
 
     public interface PlaylistClickListener {
+
         void onPlaylistClicked(Playlist playlist);
     }
 
@@ -49,7 +50,11 @@ public class PlaylistFragment extends BaseFragment {
     @Nullable
     PlaylistClickListener playlistClickListener;
 
-    private Disposable disposable;
+    private Disposable refreshDisposable;
+
+    private CompositeDisposable disposables = new CompositeDisposable();
+
+    private PlaylistMenuFragmentHelper playlistMenuFragmentHelper = new PlaylistMenuFragmentHelper(this, disposables, null);
 
     public PlaylistFragment() {
 
@@ -87,7 +92,7 @@ public class PlaylistFragment extends BaseFragment {
     }
 
     @Override
-    public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         FastScrollRecyclerView recyclerView = (FastScrollRecyclerView) inflater.inflate(R.layout.fragment_recycler, container, false);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         recyclerView.setRecyclerListener(new RecyclerListener());
@@ -100,9 +105,11 @@ public class PlaylistFragment extends BaseFragment {
     public void onPause() {
         super.onPause();
 
-        if (disposable != null) {
-            disposable.dispose();
+        if (refreshDisposable != null) {
+            refreshDisposable.dispose();
         }
+
+        disposables.clear();
     }
 
     @Override
@@ -111,7 +118,6 @@ public class PlaylistFragment extends BaseFragment {
 
         refreshAdapterItems();
     }
-
 
     private void refreshAdapterItems() {
         PermissionUtils.RequestStoragePermissions(() -> {
@@ -135,7 +141,7 @@ public class PlaylistFragment extends BaseFragment {
 
                 Observable<List<Playlist>> playlistsObservable = DataManager.getInstance().getPlaylistsRelay();
 
-                disposable = Observable.combineLatest(
+                refreshDisposable = Observable.combineLatest(
                         defaultPlaylistsObservable, playlistsObservable, (defaultPlaylists, playlists) -> {
                             List<Playlist> list = new ArrayList<>();
                             list.addAll(defaultPlaylists);
@@ -154,10 +160,10 @@ public class PlaylistFragment extends BaseFragment {
                                 }
 
                                 @Override
-                                public void onPlaylistOverflowClick(int position, View v, Playlist playlist) {
-                                    PopupMenu menu = new PopupMenu(PlaylistFragment.this.getActivity(), v);
-                                    MenuUtils.setupPlaylistMenu(menu, playlist);
-                                    menu.setOnMenuItemClickListener(MenuUtils.getPlaylistPopupMenuClickListener(getContext(), playlist, null));
+                                public void onPlaylistOverflowClick(int position, View view, Playlist playlist) {
+                                    PopupMenu menu = new PopupMenu(getContext(), view);
+                                    PlaylistMenuUtils.setupPlaylistMenu(menu, playlist);
+                                    menu.setOnMenuItemClickListener(PlaylistMenuUtils.getPlaylistPopupMenuClickListener(mediaManager, playlist, playlistMenuFragmentHelper.getCallbacks()));
                                     menu.show();
                                 }
                             };

@@ -1,6 +1,7 @@
 package com.simplecity.amp_library.ui.fragments;
 
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.PopupMenu;
@@ -12,12 +13,12 @@ import android.view.SubMenu;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
-
 import com.annimon.stream.Stream;
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.RequestManager;
 import com.simplecity.amp_library.R;
 import com.simplecity.amp_library.model.Song;
 import com.simplecity.amp_library.ui.adapters.SectionedAdapter;
-import com.simplecity.amp_library.ui.dialog.UpgradeDialog;
 import com.simplecity.amp_library.ui.modelviews.EmptyView;
 import com.simplecity.amp_library.ui.modelviews.SelectableViewModel;
 import com.simplecity.amp_library.ui.modelviews.ShuffleView;
@@ -26,27 +27,27 @@ import com.simplecity.amp_library.ui.views.ContextualToolbar;
 import com.simplecity.amp_library.utils.ContextualToolbarHelper;
 import com.simplecity.amp_library.utils.DataManager;
 import com.simplecity.amp_library.utils.LogUtils;
-import com.simplecity.amp_library.utils.MenuUtils;
-import com.simplecity.amp_library.utils.MusicUtils;
 import com.simplecity.amp_library.utils.PermissionUtils;
 import com.simplecity.amp_library.utils.PlaylistUtils;
-import com.simplecity.amp_library.utils.ShuttleUtils;
-import com.simplecity.amp_library.utils.SortManager;
+import com.simplecity.amp_library.utils.SettingsManager;
+import com.simplecity.amp_library.utils.menu.song.SongMenuFragmentHelper;
+import com.simplecity.amp_library.utils.menu.song.SongMenuUtils;
+import com.simplecity.amp_library.utils.sorting.SongSortHelper;
+import com.simplecity.amp_library.utils.sorting.SortManager;
 import com.simplecityapps.recycler_adapter.model.ViewModel;
 import com.simplecityapps.recycler_adapter.recyclerview.RecyclerListener;
 import com.simplecityapps.recyclerview_fastscroll.views.FastScrollRecyclerView;
-
-import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-
 import io.reactivex.Observable;
 import io.reactivex.Single;
 import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.CompositeDisposable;
 import io.reactivex.disposables.Disposable;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+import kotlin.Unit;
 
 public class SongFragment extends BaseFragment implements
-        MusicUtils.Defs,
         SongView.ClickListener,
         ShuffleView.ShuffleClickListener {
 
@@ -65,10 +66,16 @@ public class SongFragment extends BaseFragment implements
     private ContextualToolbarHelper<Song> contextualToolbarHelper;
 
     @Nullable
-    private Disposable disposable;
+    private Disposable refreshDisposable;
 
     @Nullable
     private Disposable playlistMenuDisposable;
+
+    private CompositeDisposable menuDisposables = new CompositeDisposable();
+
+    private SongMenuFragmentHelper songMenuFragmentHelper = new SongMenuFragmentHelper(this, menuDisposables, null);
+
+    private RequestManager requestManager;
 
     public SongFragment() {
 
@@ -92,10 +99,12 @@ public class SongFragment extends BaseFragment implements
 
         shuffleView = new ShuffleView();
         shuffleView.setClickListener(this);
+
+        requestManager = Glide.with(this);
     }
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         if (recyclerView == null) {
             recyclerView = (FastScrollRecyclerView) inflater.inflate(R.layout.fragment_recycler, container, false);
             recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
@@ -123,8 +132,9 @@ public class SongFragment extends BaseFragment implements
                     if (getActivity() != null && isAdded()) {
 
                         boolean ascending = SortManager.getInstance().getSongsAscending();
+                        boolean showArtwork = SettingsManager.getInstance().showArtworkInSongList();
 
-                        disposable = DataManager.getInstance().getSongsRelay()
+                        refreshDisposable = DataManager.getInstance().getSongsRelay()
                                 .skipWhile(songs -> !force && Stream.of(adapter.items).filter(viewModel -> viewModel instanceof SongView).count() == songs.size())
                                 .debounce(150, TimeUnit.MILLISECONDS)
                                 .flatMapSingle(songs -> {
@@ -138,14 +148,17 @@ public class SongFragment extends BaseFragment implements
                                             .map(song -> {
                                                 // Look for an existing SongView wrapping the song, we'll reuse it if it exists.
                                                 SongView songView = (SongView) Stream.of(adapter.items)
-                                                        .filter(viewModel -> viewModel instanceof SongView && (((SongView) viewModel).song.equals(song)))
+                                                        .filter(viewModel -> viewModel instanceof SongView
+                                                                && (((SongView) viewModel).song.equals(song))
+                                                                && ((SongView) viewModel).getShowAlbumArt() == showArtwork)
                                                         .findFirst()
                                                         .orElse(null);
 
                                                 if (songView == null) {
-                                                    songView = new SongView(song, null);
+                                                    songView = new SongView(song, requestManager);
                                                     songView.setClickListener(this);
                                                 }
+                                                songView.showAlbumArt(showArtwork);
 
                                                 return (ViewModel) songView;
                                             })
@@ -176,13 +189,15 @@ public class SongFragment extends BaseFragment implements
     @Override
     public void onPause() {
 
-        if (disposable != null) {
-            disposable.dispose();
+        if (refreshDisposable != null) {
+            refreshDisposable.dispose();
         }
 
         if (playlistMenuDisposable != null) {
             playlistMenuDisposable.dispose();
         }
+
+        menuDisposables.clear();
 
         super.onPause();
     }
@@ -198,81 +213,30 @@ public class SongFragment extends BaseFragment implements
     public void onPrepareOptionsMenu(Menu menu) {
         super.onPrepareOptionsMenu(menu);
 
-        int sortOrder = SortManager.getInstance().getSongsSortOrder();
+        SongSortHelper.updateSongSortMenuItems(menu, SortManager.getInstance().getSongsSortOrder(), SortManager.getInstance().getSongsAscending());
 
-        switch (sortOrder) {
-            case SortManager.SongSort.DEFAULT:
-                menu.findItem(R.id.sort_default).setChecked(true);
-                break;
-            case SortManager.SongSort.NAME:
-                menu.findItem(R.id.sort_song_name).setChecked(true);
-                break;
-            case SortManager.SongSort.TRACK_NUMBER:
-                menu.findItem(R.id.sort_song_track_number).setChecked(true);
-                break;
-            case SortManager.SongSort.DURATION:
-                menu.findItem(R.id.sort_song_duration).setChecked(true);
-                break;
-            case SortManager.SongSort.DATE:
-                menu.findItem(R.id.sort_song_date).setChecked(true);
-                break;
-            case SortManager.SongSort.YEAR:
-                menu.findItem(R.id.sort_song_year).setChecked(true);
-                break;
-            case SortManager.SongSort.ALBUM_NAME:
-                menu.findItem(R.id.sort_song_album_name).setChecked(true);
-                break;
-            case SortManager.SongSort.ARTIST_NAME:
-                menu.findItem(R.id.sort_song_artist_name).setChecked(true);
-                break;
-        }
-
-        menu.findItem(R.id.sort_ascending).setChecked(SortManager.getInstance().getSongsAscending());
+        menu.findItem(R.id.showArtwork).setChecked(SettingsManager.getInstance().showArtworkInSongList());
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-
-        switch (item.getItemId()) {
-            case R.id.sort_default:
-                SortManager.getInstance().setSongsSortOrder(SortManager.SongSort.DEFAULT);
-                sortOrderChanged = true;
-                break;
-            case R.id.sort_song_name:
-                SortManager.getInstance().setSongsSortOrder(SortManager.SongSort.NAME);
-                sortOrderChanged = true;
-                break;
-            case R.id.sort_song_track_number:
-                SortManager.getInstance().setSongsSortOrder(SortManager.SongSort.TRACK_NUMBER);
-                sortOrderChanged = true;
-                break;
-            case R.id.sort_song_duration:
-                SortManager.getInstance().setSongsSortOrder(SortManager.SongSort.DURATION);
-                sortOrderChanged = true;
-                break;
-            case R.id.sort_song_year:
-                SortManager.getInstance().setSongsSortOrder(SortManager.SongSort.YEAR);
-                sortOrderChanged = true;
-                break;
-            case R.id.sort_song_date:
-                SortManager.getInstance().setSongsSortOrder(SortManager.SongSort.DATE);
-                sortOrderChanged = true;
-                break;
-            case R.id.sort_song_album_name:
-                SortManager.getInstance().setSongsSortOrder(SortManager.SongSort.ALBUM_NAME);
-                sortOrderChanged = true;
-                break;
-            case R.id.sort_song_artist_name:
-                SortManager.getInstance().setSongsSortOrder(SortManager.SongSort.ARTIST_NAME);
-                sortOrderChanged = true;
-                break;
-            case R.id.sort_ascending:
-                SortManager.getInstance().setSongsAscending(!item.isChecked());
-                sortOrderChanged = true;
-                break;
+        Integer songSortOder = SongSortHelper.handleSongMenuSortOrderClicks(item);
+        if (songSortOder != null) {
+            SortManager.getInstance().setSongsSortOrder(songSortOder);
+            refreshAdapterItems(true);
+            getActivity().invalidateOptionsMenu();
+            return true;
+        }
+        Boolean songsAsc = SongSortHelper.handleSongDetailMenuSortOrderAscClicks(item);
+        if (songsAsc != null) {
+            SortManager.getInstance().setSongsAscending(songsAsc);
+            refreshAdapterItems(true);
+            getActivity().invalidateOptionsMenu();
+            return true;
         }
 
-        if (sortOrderChanged) {
+        if (item.getItemId() == R.id.showArtwork) {
+            SettingsManager.getInstance().setShowArtworkInSongList(!item.isChecked());
             refreshAdapterItems(true);
             getActivity().invalidateOptionsMenu();
         }
@@ -288,29 +252,18 @@ public class SongFragment extends BaseFragment implements
                     .map(adaptableItem -> ((SongView) adaptableItem).song)
                     .toList();
 
-            MusicUtils.playAll(songs, songs.indexOf(songView.song), true, (String message) ->
-                    Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show());
+            mediaManager.playAll(songs, songs.indexOf(songView.song), true, message -> {
+                Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show();
+                return Unit.INSTANCE;
+            });
         }
     }
 
     @Override
-    public void onSongOverflowClick(int position, View v, Song song) {
-        PopupMenu menu = new PopupMenu(SongFragment.this.getActivity(), v);
-        MenuUtils.setupSongMenu(menu, false);
-        menu.setOnMenuItemClickListener(MenuUtils.getSongMenuClickListener(
-                getContext(),
-                song,
-                taggerDialog -> {
-                    if (!ShuttleUtils.isUpgraded()) {
-                        UpgradeDialog.getUpgradeDialog(getActivity()).show();
-                    } else {
-                        taggerDialog.show(getChildFragmentManager());
-                    }
-                },
-                deleteDialog -> deleteDialog.show(getChildFragmentManager()),
-                null,
-                null,
-                null));
+    public void onSongOverflowClick(int position, View view, Song song) {
+        PopupMenu menu = new PopupMenu(getContext(), view);
+        SongMenuUtils.setupSongMenu(menu, false);
+        menu.setOnMenuItemClickListener(SongMenuUtils.getSongMenuClickListener(getContext(), mediaManager, position, song, songMenuFragmentHelper.getSongMenuCallbacks()));
         menu.show();
     }
 
@@ -326,7 +279,10 @@ public class SongFragment extends BaseFragment implements
 
     @Override
     public void onShuffleItemClick() {
-        MusicUtils.shuffleAll(DataManager.getInstance().getSongsRelay().firstOrError(), message -> Toast.makeText(getContext(), message, Toast.LENGTH_LONG).show());
+        mediaManager.shuffleAll(DataManager.getInstance().getSongsRelay().firstOrError(), message -> {
+            Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show();
+            return Unit.INSTANCE;
+        });
     }
 
     @Override
@@ -365,11 +321,8 @@ public class SongFragment extends BaseFragment implements
                 }
             });
 
-
-            contextualToolbar.setOnMenuItemClickListener(MenuUtils.getSongMenuClickListener(getContext(),
-                    Single.fromCallable(() -> contextualToolbarHelper.getItems()),
-                    deleteDialog -> deleteDialog.show(getChildFragmentManager()),
-                    () -> contextualToolbarHelper.finish()));
+            contextualToolbar.setOnMenuItemClickListener(SongMenuUtils.getSongMenuClickListener(getContext(), mediaManager, Single.defer(() -> Single.just(contextualToolbarHelper.getItems())),
+                    songMenuFragmentHelper.getSongMenuCallbacks()));
         }
     }
 

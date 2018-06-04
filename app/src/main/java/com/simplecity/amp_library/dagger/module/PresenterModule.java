@@ -9,7 +9,6 @@ import com.simplecity.amp_library.ui.presenters.QueuePresenter;
 import com.simplecity.amp_library.ui.views.PlayerView;
 import com.simplecity.amp_library.ui.views.QueuePagerView;
 import com.simplecity.amp_library.ui.views.QueueView;
-
 import dagger.Binds;
 import dagger.Module;
 

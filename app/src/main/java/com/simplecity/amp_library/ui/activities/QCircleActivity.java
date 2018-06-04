@@ -18,12 +18,10 @@ import android.view.WindowManager;
 import android.widget.ImageButton;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
-
 import com.simplecity.amp_library.R;
-import com.simplecity.amp_library.playback.MusicService;
+import com.simplecity.amp_library.model.Song;
+import com.simplecity.amp_library.playback.constants.InternalIntents;
 import com.simplecity.amp_library.utils.MusicServiceConnectionUtils;
-import com.simplecity.amp_library.utils.MusicUtils;
-
 
 //Todo: Reapply themes
 public class QCircleActivity extends BaseActivity {
@@ -99,7 +97,6 @@ public class QCircleActivity extends BaseActivity {
 
         //Crops a layout for the QuickCircle window
         setCircleLayoutParam(circlemainView);
-
     }
 
     @Override
@@ -107,10 +104,9 @@ public class QCircleActivity extends BaseActivity {
         super.onStart();
 
         final IntentFilter filter = new IntentFilter();
-        filter.addAction(MusicService.InternalIntents.PLAY_STATE_CHANGED);
-        filter.addAction(MusicService.InternalIntents.META_CHANGED);
+        filter.addAction(InternalIntents.PLAY_STATE_CHANGED);
+        filter.addAction(InternalIntents.META_CHANGED);
         registerReceiver(mStatusListener, new IntentFilter(filter));
-
     }
 
     @Override
@@ -133,7 +129,6 @@ public class QCircleActivity extends BaseActivity {
         filter.addAction(ACTION_ACCESSORY_COVER_EVENT);
         // Register a broadcast receiver with the system
         mContext.registerReceiver(mIntentReceiver, filter);
-
     }
 
     void setQuickCircleWindowParam() {
@@ -184,7 +179,6 @@ public class QCircleActivity extends BaseActivity {
             Log.d(TAG, "quickCircleEnabled:" + quickCircleEnabled);
         }
 
-
         //[START] Get the QuickCircle window information
         int id = getResources().getIdentifier("config_circle_window_width", "dimen",
                 "com.lge.internal");
@@ -222,7 +216,6 @@ public class QCircleActivity extends BaseActivity {
         //[END]
     }
 
-
     private void initButtons() {
 
         prevBtn = findViewById(R.id.btn_prev);
@@ -230,16 +223,14 @@ public class QCircleActivity extends BaseActivity {
         pauseBtn = findViewById(R.id.btn_pause);
         setPauseButtonImage();
 
+        prevBtn.setOnClickListener(v -> mediaManager.previous(true));
 
-        prevBtn.setOnClickListener(v -> MusicUtils.previous(true));
-
-        skipBtn.setOnClickListener(v -> MusicUtils.next());
+        skipBtn.setOnClickListener(v -> mediaManager.next());
 
         pauseBtn.setOnClickListener(v -> {
-            MusicUtils.playOrPause();
+            mediaManager.playOrPause();
             setPauseButtonImage();
         });
-
     }
 
     public void initTextViews() {
@@ -252,7 +243,7 @@ public class QCircleActivity extends BaseActivity {
         if (pauseBtn == null) {
             return;
         }
-        if (MusicServiceConnectionUtils.serviceBinder != null && MusicUtils.isPlaying()) {
+        if (MusicServiceConnectionUtils.serviceBinder != null && mediaManager.isPlaying()) {
 
         } else {
 
@@ -268,14 +259,17 @@ public class QCircleActivity extends BaseActivity {
         if (textOne == null || textTwo == null) {
             return;
         }
-        textOne.setText(MusicUtils.getAlbumArtistName());
-        textTwo.setText(MusicUtils.getSongName());
+
+        Song song = mediaManager.getSong();
+        if (song == null) return;
+
+        textOne.setText(song.albumArtistName);
+        textTwo.setText(song.name);
     }
 
     private BroadcastReceiver mIntentReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-
 
             String action = intent.getAction();
             if (action == null) {
@@ -324,10 +318,10 @@ public class QCircleActivity extends BaseActivity {
 
             final String action = intent.getAction();
             if (action != null) {
-                if (action.equals(MusicService.InternalIntents.META_CHANGED)) {
+                if (action.equals(InternalIntents.META_CHANGED)) {
                     updateTrackInfo();
                     setPauseButtonImage();
-                } else if (action.equals(MusicService.InternalIntents.PLAY_STATE_CHANGED)) {
+                } else if (action.equals(InternalIntents.PLAY_STATE_CHANGED)) {
                     setPauseButtonImage();
                 }
             }

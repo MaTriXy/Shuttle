@@ -14,7 +14,6 @@ import android.support.v4.app.DialogFragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.provider.DocumentFile;
 import android.widget.Toast;
-
 import com.annimon.stream.Collectors;
 import com.annimon.stream.Stream;
 import com.annimon.stream.function.Supplier;
@@ -22,25 +21,25 @@ import com.simplecity.amp_library.R;
 import com.simplecity.amp_library.model.Album;
 import com.simplecity.amp_library.model.AlbumArtist;
 import com.simplecity.amp_library.model.Song;
+import com.simplecity.amp_library.playback.MediaManager;
 import com.simplecity.amp_library.saf.SafManager;
 import com.simplecity.amp_library.sql.providers.PlayCountTable;
 import com.simplecity.amp_library.utils.CustomMediaScanner;
 import com.simplecity.amp_library.utils.DialogUtils;
 import com.simplecity.amp_library.utils.LogUtils;
-import com.simplecity.amp_library.utils.MusicUtils;
-
-import java.io.File;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
+import com.simplecity.amp_library.utils.extensions.SongExtKt;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
 import io.reactivex.Single;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.CompositeDisposable;
 import io.reactivex.schedulers.Schedulers;
+import java.io.File;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import javax.inject.Inject;
 
 public class DeleteDialog extends DialogFragment implements SafManager.SafDialog.SafResultListener {
 
@@ -67,6 +66,9 @@ public class DeleteDialog extends DialogFragment implements SafManager.SafDialog
 
     @StringRes
     private int deleteMessageId;
+
+    @Inject
+    MediaManager mediaManager;
 
     private List<AlbumArtist> artists;
     private List<Album> albums;
@@ -163,8 +165,7 @@ public class DeleteDialog extends DialogFragment implements SafManager.SafDialog
         String nameString;
         if (names.size() > 1) {
             stringToFormat = getString(deleteMessageId);
-            nameString = Stream.of(songs)
-                    .map(song -> song.name)
+            nameString = Stream.of(names)
                     .map(itemName -> "\n\u2022 " + itemName)
                     .collect(Collectors.joining()) + "\n";
         } else {
@@ -290,13 +291,12 @@ public class DeleteDialog extends DialogFragment implements SafManager.SafDialog
             }
 
             if (!songsForNormalDeletion.isEmpty()) {
-                deletedSongs += Stream.of(songsForNormalDeletion).filter(Song::delete).count();
+                deletedSongs += Stream.of(songsForNormalDeletion).filter(SongExtKt::delete).count();
                 tidyUp(songsForNormalDeletion);
                 songsForNormalDeletion.clear();
             }
             return deletedSongs;
         });
-
     }
 
     void tidyUp(@NonNull List<Song> deletedSongs) {
@@ -305,7 +305,7 @@ public class DeleteDialog extends DialogFragment implements SafManager.SafDialog
         }
 
         // Remove songs from current play queue
-        MusicUtils.removeFromQueue(deletedSongs);
+        mediaManager.removeFromQueue(deletedSongs);
 
         // Remove songs from play count table
         ArrayList<ContentProviderOperation> operations = Stream.of(deletedSongs).map(song -> ContentProviderOperation
@@ -342,8 +342,6 @@ public class DeleteDialog extends DialogFragment implements SafManager.SafDialog
                         }
                         dismiss();
                     }, error -> LogUtils.logException(TAG, "Failed to delete songs", error)));
-
-
         } else {
             Toast.makeText(getContext(), R.string.delete_songs_failure_toast, Toast.LENGTH_LONG).show();
             dismiss();
